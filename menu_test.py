@@ -59,13 +59,14 @@ manual_mode_lock_flag = True
 second_press_to_comfirm_flag = False
 
 menu_flag = True
+exit_flag = True
 
 option_selected = "none"
 
-options_key = ['Manual', 'Line Following', 'Maze', 'Speed Run', 'Kicker', 'Radio', 'Shutdown', 'Reboot',
+options_key = ['Manual Mode', 'Line Following', 'Maze', 'Speed Run', 'Kicker', 'Radio', 'Shutdown', 'Reboot','Exit',
            'I P address']
-options_module = {'Manual': False, 'Line Following': False, 'Maze': False, 'Speed Run': False, 'Kicker': False, 'Radio': False, 'Shutdown': False, 'Reboot': False,
-           'I P address': False}
+options_module = {'Manual Mode': False, 'Line Following': False, 'Maze': False, 'Speed Run': False, 'Kicker': False,
+                  'Radio': False, 'Shutdown': False, 'Reboot': False,'I P address': False, 'Exit': False}
 
 menu_position_flag = 0
 
@@ -73,6 +74,7 @@ power_left = 0.0
 power_right = 0.0
 x_axis = 0.0
 y_axis = 0.0
+
 
 def mixer(inYaw, inThrottle,):
     left = inThrottle + inYaw
@@ -119,6 +121,15 @@ def speed():
 
         print("#### speed ####")
 
+def speakIPAddress():
+    wlan = get_ip_address('wlan0')
+    command = "flite -voice rms -t 'My I P address is " + wlan + "' "
+    print command
+    os.system(command)
+
+
+speakIPAddress()
+
 
 
 # main menu
@@ -129,7 +140,7 @@ try:
     loopCount = 0
 
     # Loop indefinitely
-    while True:
+    while exit_flag:
         events = get_gamepad()
         #print events
         #print loopCount
@@ -162,7 +173,7 @@ try:
 
                             second_press_to_comfirm_flag = False
                         else:
-                            os.system("flite -voice rms -t 'press again to comfirm or cross to exit ' ")
+                            os.system("flite -voice rms -t 'press again to comfirm " + options_key[menu_position_flag] + " or cross to exit ' ")
                             second_press_to_comfirm_flag = True
 
                 if event.code == "BTN_TR2":
@@ -229,7 +240,7 @@ try:
 
 # manual mode
 
-            if options_module['Manual']:
+            if options_module['Manual Mode']:
                 if event.code == "ABS_Y":
                     if event.state > 130:
                         print("Backwards")
@@ -267,16 +278,17 @@ try:
                     if event.state == True:
                         print("Top right")
                         os.system("python /home/pi/randomFart.py &")
-                if event.code == "ABS_HAT0Y":
-                    if event.state == -1:
-                        print("D pad Up")
+                if event.code == "BTN_WEST":
+                    if event.state == True:
+                        print("Top left")
                         os.system("play /home/pi/Sounds/squirrel01.mp3 &")
                 if event.code == "BTN_TL2":
                     if event.state == True:
                         print("Select")
                         menu_flag = True
-                        options_module['Manual'] = False
+                        options_module['Manual Mode'] = False
                         print("Manual Mode Exit")
+                        os.system("flite -voice rms -t 'Manual Mode Exit' ")
                         x_axis = 0
                         y_axis = 0
 
@@ -331,6 +343,16 @@ try:
             if options_module['Shutdown']:
 
                 print("#### Good Bye ####")
+                command = "flite -voice rms  daisy.txt "
+                print command
+                os.system(command)
+                time.sleep(3)
+                command = "flite -voice rms  -t 'Goodbye Dave' "
+                print command
+                os.system(command)
+                time.sleep(1)
+                options_module['Shutdown'] = False
+                menu_flag = True
                 subprocess.call("sudo halt", shell=True)
 
 # ip address
@@ -338,10 +360,7 @@ try:
                 options_module['I P address'] = False
                 menu_flag = True
 
-                wlan = get_ip_address('wlan0')
-                command = "flite -voice rms -t 'My I P address is "+ wlan +"' "
-                print command
-                os.system(command)
+                speakIPAddress()
                 print("#### IP Address ####")
 # reboot
             if options_module['Reboot']:
@@ -364,6 +383,14 @@ try:
                 print("#### restarting ####")
                 subprocess.call("sudo reboot", shell=True)
 
+# exit to command line
+            if options_module['Exit']:
+                options_module['Exit'] = False
+                exit_flag = False
+
+
+                print("#### exiting to command line ####")
+
 
 
 
@@ -373,4 +400,6 @@ except KeyboardInterrupt:
     print("\nstopping")
     PBR.SetMotor1(0)
     PBR.SetMotor2(0)
+
+os.system("flite -voice rms -t 'Exiting to the Command line' ")
 print("bye")
