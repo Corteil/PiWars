@@ -55,20 +55,21 @@ if len(sys.argv) > 1:
         debug = True
 
 # setup ToF ranging/ALS sensor
-
-tof_address = 0x29
-tof_sensor = VL6180X(address=tof_address, debug=False)
-tof_sensor.get_identification()
-if tof_sensor.idModel != 0xB4:
-    print"Not a valid sensor id: %X" % tof_sensor.idModel
-else:
-    print"Sensor model: %X" % tof_sensor.idModel
-    print"Sensor model rev.: %d.%d" % \
-         (tof_sensor.idModelRevMajor, tof_sensor.idModelRevMinor)
-    print"Sensor module rev.: %d.%d" % \
-         (tof_sensor.idModuleRevMajor, tof_sensor.idModuleRevMinor)
-    print"Sensor date/time: %X/%X" % (tof_sensor.idDate, tof_sensor.idTime)
-tof_sensor.default_settings()
+for i in range(0,6,1):
+    plexer.channel(address_mux, i)
+    tof_address = 0x29
+    tof_sensor = VL6180X(address=tof_address, debug=debug)
+    tof_sensor.get_identification()
+    if tof_sensor.idModel != 0xB4:
+        print"Not a valid sensor id: %X" % tof_sensor.idModel
+    else:
+        print"Sensor model: %X" % tof_sensor.idModel
+        print"Sensor model rev.: %d.%d" % \
+             (tof_sensor.idModelRevMajor, tof_sensor.idModelRevMinor)
+        print"Sensor module rev.: %d.%d" % \
+             (tof_sensor.idModuleRevMajor, tof_sensor.idModuleRevMinor)
+        print"Sensor date/time: %X/%X" % (tof_sensor.idDate, tof_sensor.idTime)
+    tof_sensor.default_settings()
 
 # touch setup
 
@@ -537,23 +538,26 @@ try:
                 os.system(command)
                 while button_flag:
                     time.sleep(0.001)
+                    button_flag =  False
                 LCD_update("I feel the need"," for speed","",0,125,255)
+
 
                 # define max power
 
-                speed = 0.6
+                speed = 1.0
 
                 # define motor variables and assign zero to them
                 drive_left = 0
                 drive_right = 0
 
                 while cancel_flag:
+
                     readings = [0, 0, 0, 0, 0, 0]
                     for ToFaddress in range(0, 6):
                         plexer.channel(address_mux, ToFaddress)
                         readings[ToFaddress] = tof_sensor.get_distance()
 
-                        sleep(0.01)
+                        time.sleep(0.01)
                     print readings
 
                     # turn it up to 11
@@ -573,18 +577,18 @@ try:
 
                     elif left_sensor > right_sensor:
                         print("turn left")
-                        drive_left = speed - (speed * 0.8)
+                        drive_left = speed - (speed * 0.1)
                         drive_right = speed
 
                     elif right_sensor > left_sensor:
                         print("turn right")
                         drive_left = speed
-                        drive_right = speed - (speed * 0.8)
+                        drive_right = speed - (speed * 0.1)
 
                     # set motor power levels
+                    PBR.SetMotor1(-drive_left * maxPower)
+                    PBR.SetMotor2((drive_right * maxPower))
 
-                    PBR.SetMotor1((-drive_right * maxPower))
-                    PBR.SetMotor2(drive_left * maxPower)
 
                 # stop motors
                 PBR.SetMotor1(0)
