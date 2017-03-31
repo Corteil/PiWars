@@ -18,6 +18,8 @@ from dothat import backlight
 from dothat import touch
 import RPi.GPIO as GPIO
 import lineSensor
+from ST_VL6180X import VL6180X
+import multiplex
 
 # kicker pins setup
 
@@ -36,20 +38,43 @@ line_following_left_pin = 17
 line_following_middle_pin = 27
 line_following_right_pin = 22
 
-# define lineFollowing pins
+# define lineFollowing as line
 
 line = lineSensor.LineSensor(line_following_left_pin, line_following_middle_pin, line_following_right_pin)
+
+# mux setup
+
+i2cbus = 1  # 0 for rev1 boards etc.
+address_mux = 0x70
+
+plexer = multiplex.multiplex(i2cbus)
+
+debug = False
+if len(sys.argv) > 1:
+    if sys.argv[1] == "debug":  # sys.argv[0] is the filename
+        debug = True
+
+# setup ToF ranging/ALS sensor
+
+tof_address = 0x29
+tof_sensor = VL6180X(address=tof_address, debug=False)
+tof_sensor.get_identification()
+if tof_sensor.idModel != 0xB4:
+    print"Not a valid sensor id: %X" % tof_sensor.idModel
+else:
+    print"Sensor model: %X" % tof_sensor.idModel
+    print"Sensor model rev.: %d.%d" % \
+         (tof_sensor.idModelRevMajor, tof_sensor.idModelRevMinor)
+    print"Sensor module rev.: %d.%d" % \
+         (tof_sensor.idModuleRevMajor, tof_sensor.idModuleRevMinor)
+    print"Sensor date/time: %X/%X" % (tof_sensor.idDate, tof_sensor.idTime)
+tof_sensor.default_settings()
 
 # touch setup
 
 #touch.high_sensitivity()
 
 
-
-
-
-# Re-direct our output to standard error, we need to ignore standard out to hide some nasty print statements from pygame
-sys.stdout = sys.stderr
 
 # Setup the PicoBorg Reverse
 PBR = PicoBorgRev.PicoBorgRev()
@@ -207,6 +232,8 @@ speakIPAddress()
 time.sleep(3)
 LCD_update()
 
+
+
 # main menu and main loop
 
 try:
@@ -329,6 +356,8 @@ try:
 
                 if lcd_flag:
                     LCD_update("Danager! Meatbag", "   in Control", " SELECT to EXIT", 255, 0, 0)
+                    command = "flite -voice rms -t 'Danager! Meatbag in Control' "
+                    os.system(command)
                     lcd_flag = False
 
                 if event.code == "ABS_Y":
@@ -382,6 +411,24 @@ try:
                         os.system("flite -voice rms -t 'Manual Mode Exit' ")
                         x_axis = 0
                         y_axis = 0
+                if event.code == "ABS_HAT0X":
+                    if event.state == -1:
+                        print("D pad Left")
+                        os.system('echo "pt_step -1" >  /home/pi/PiWars/m_fifo &')
+                    elif event.state == 1:
+                        print("D pad Right")
+                    os.system('echo "pt_step 1" >  /home/pi/PiWars/m_fifo &')
+                if event.code == "ABS_HAT0Y":
+
+                    if event.state == -1:
+
+                        print("D pad Up")
+                        os.system("echo 'stop' > /home/pi/PiWars/m_fifo &")
+
+                    elif event.state == 1:
+
+                        print("D pad Down")
+                        os.system("echo 'pause' > /home/pi/PiWars/m_fifo &")
 
                 mixer_results = mixer(x_axis, y_axis)
                 print (mixer_results)
@@ -424,21 +471,39 @@ try:
                         if values == [1, 0, 0]:
                             drive_left = -speed
                             drive_right = speed
+                            backlight.left_rgb(0, 0, 255)
+                            backlight.mid_rgb(255, 0, 0)
+                            backlight.right_rgb(255, 0, 0)
                             print("### left ###")
 
                         if values == [0, 1, 0]:
                             drive_left = speed
                             drive_right = speed
+
+                            backlight.left_rgb(255, 0, 0)
+                            backlight.mid_rgb(0, 0, 255)
+                            backlight.right_rgb(255, 0, 0)
+
                             print("### middle ###")
 
                         if values == [0, 0, 1]:
                             drive_left = speed
                             drive_right = -speed
+
+                            backlight.left_rgb(255, 0, 0)
+                            backlight.mid_rgb(255, 0, 0)
+                            backlight.right_rgb(0, 0, 255)
+
                             print("### right ###")
 
                         if values == [0, 0, 0]:
                             drive_left = old_drive_left
                             drive_right = old_drive_right
+
+                            backlight.left_rgb(255, 0, 0)
+                            backlight.mid_rgb(255, 0, 0)
+                            backlight.right_rgb(255, 0, 0)
+
                             print("### old ###")
 
                         print("### left: " + str(values[0]) + " middle: " + str(values[1]) + " right: " + str(values[2]) + " ###")
@@ -468,11 +533,64 @@ try:
 
             if options_module['Speed Run']:
                 LCD_update("","   Speed Run","",255,0,0)
+                command = "flite -voice rms -t 'I feel the need for speed!' "
+                os.system(command)
                 while button_flag:
                     time.sleep(0.001)
                 LCD_update("I feel the need"," for speed","",0,125,255)
+
+                # define max power
+
+                speed = 0.6
+
+                # define motor variables and assign zero to them
+                drive_left = 0
+                drive_right = 0
+
                 while cancel_flag:
-                    time.sleep(0.001)
+                    readings = [0, 0, 0, 0, 0, 0]
+                    for ToFaddress in range(0, 6):
+                        plexer.channel(address_mux, ToFaddress)
+                        readings[ToFaddress] = tof_sensor.get_distance()
+
+                        sleep(0.01)
+                    print readings
+
+                    # turn it up to 11
+
+                    left_sensor = readings[4]
+                    right_sensor = readings[1]
+
+                    if left_sensor > 240 & right_sensor > 240:
+                        print("full speed ahead")
+                        drive_left = speed
+                        drive_right = speed
+
+                    elif left_sensor == right_sensor:
+                        print("full speed ahead")
+                        drive_left = speed
+                        drive_right = speed
+
+                    elif left_sensor > right_sensor:
+                        print("turn left")
+                        drive_left = speed - (speed * 0.8)
+                        drive_right = speed
+
+                    elif right_sensor > left_sensor:
+                        print("turn right")
+                        drive_left = speed
+                        drive_right = speed - (speed * 0.8)
+
+                    # set motor power levels
+
+                    PBR.SetMotor1((-drive_right * maxPower))
+                    PBR.SetMotor2(drive_left * maxPower)
+
+                # stop motors
+                PBR.SetMotor1(0)
+                PBR.SetMotor2(0)
+
+
                 button_flag = True
                 cancel_flag = True
                 options_module['Speed Run'] = False
@@ -578,9 +696,49 @@ try:
                 print("#### kicker ####")
 # radio
             if options_module['Radio']:
-                options_module['Radio'] = False
-                menu_flag = True
-                #subprocess.call("play /home/pi/Sounds/8bit/", shell=True)
+
+                menu_flag = False
+                if event.code == "BTN_TR2":
+                    if event.state == True:
+                        print("Start")
+                        try:
+                            os.system("mkfifo /home/pi/PiWars/m_fifo &")
+                            time.sleep(0.1)
+                        except:
+                            print("#### no file created ####")
+
+
+                        os.system("mplayer -quiet -slave -loop 0 -input file=/home/pi/PiWars/m_fifo -shuffle -playlist /home/pi/Sounds/8bit/mylist.txt &")
+
+                if event.code == "ABS_HAT0X":
+                    if event.state == -1:
+                        print("D pad Left")
+                        os.system('echo "pt_step -1" >  /home/pi/PiWars/m_fifo &')
+                    elif event.state == 1:
+                        print("D pad Right")
+                    os.system('echo "pt_step 1" >  /home/pi/PiWars/m_fifo &')
+                if event.code == "ABS_HAT0Y":
+
+                    if event.state == -1:
+
+                        print("D pad Up")
+                        os.system("echo 'stop' > /home/pi/PiWars/m_fifo &")
+
+                    elif event.state == 1:
+
+
+                        print("D pad Down")
+                        os.system("echo 'pause' > /home/pi/PiWars/m_fifo &")
+
+                if event.code == "BTN_TL2":
+                    if event.state == True:
+                        print("Select")
+                        menu_flag = True
+                        lcd_flag = True
+                        options_module['Radio'] = False
+
+                        print("Radio Mode Exit")
+                        os.system("flite 2 -voice rms -t 'Radio Exit' ")
                 print("#### Radio ####")
 # shutdown
             if options_module['Shutdown']:
@@ -653,6 +811,7 @@ try:
 except KeyboardInterrupt:
 
     # CTRL+C exit, disable all drives
+    ("echo 'stop' > /home/pi/PiWars/m_fifo")
     print("\nstopping")
     PBR.SetMotor1(0)
     PBR.SetMotor2(0)
