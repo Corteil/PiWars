@@ -44,6 +44,8 @@ line = lineSensor.LineSensor(line_following_left_pin, line_following_middle_pin,
 
 # mux setup
 
+mux_flag = True
+
 i2cbus = 1  # 0 for rev1 boards etc.
 address_mux = 0x70
 
@@ -55,25 +57,31 @@ if len(sys.argv) > 1:
         debug = True
 
 # setup ToF ranging/ALS sensor
-for i in range(0,6,1):
-    plexer.channel(address_mux, i)
-    tof_address = 0x29
-    tof_sensor = VL6180X(address=tof_address, debug=debug)
-    tof_sensor.get_identification()
-    if tof_sensor.idModel != 0xB4:
-        print"Not a valid sensor id: %X" % tof_sensor.idModel
-    else:
-        print"Sensor model: %X" % tof_sensor.idModel
-        print"Sensor model rev.: %d.%d" % \
-             (tof_sensor.idModelRevMajor, tof_sensor.idModelRevMinor)
-        print"Sensor module rev.: %d.%d" % \
-             (tof_sensor.idModuleRevMajor, tof_sensor.idModuleRevMinor)
-        print"Sensor date/time: %X/%X" % (tof_sensor.idDate, tof_sensor.idTime)
-    tof_sensor.default_settings()
+try:
+    for i in range(0,6,1):
+
+        plexer.channel(address_mux, i)
+        tof_address = 0x29
+        tof_sensor = VL6180X(address=tof_address, debug=debug)
+        tof_sensor.get_identification()
+        if tof_sensor.idModel != 0xB4:
+            print"Not a valid sensor id: %X" % tof_sensor.idModel
+        else:
+            print"Sensor model: %X" % tof_sensor.idModel
+            print"Sensor model rev.: %d.%d" % \
+                 (tof_sensor.idModelRevMajor, tof_sensor.idModelRevMinor)
+            print"Sensor module rev.: %d.%d" % \
+                 (tof_sensor.idModuleRevMajor, tof_sensor.idModuleRevMinor)
+            print"Sensor date/time: %X/%X" % (tof_sensor.idDate, tof_sensor.idTime)
+            tof_sensor.default_settings()
+except IOError:
+
+    print("MUX not fitted")
+    mux_flag = False
 
 # touch setup
 
-#touch.high_sensitivity()
+touch.high_sensitivity()
 
 
 
@@ -533,87 +541,172 @@ try:
 # Speed run
 
             if options_module['Speed Run']:
-                LCD_update("","   Speed Run","",255,0,0)
-                command = "flite -voice rms -t 'I feel the need for speed!' "
-                os.system(command)
-                while button_flag:
-                    time.sleep(0.001)
-                    button_flag =  False
-                LCD_update("I feel the need"," for speed","",0,125,255)
+                if mux_flag:
+                    LCD_update("","   Speed Run","",255,0,0)
+                    command = "flite -voice rms -t 'I feel the need for speed!' "
+                    os.system(command)
+                    while button_flag:
+                        time.sleep(0.001)
+                        button_flag =  False
+                    LCD_update("I feel the need"," for speed","",0,125,255)
 
 
-                # define max power
+                    # define max power
 
-                speed = 1.0
+                    speed = 1.0
 
-                # define motor variables and assign zero to them
-                drive_left = 0
-                drive_right = 0
+                    # define motor variables and assign zero to them
+                    drive_left = 0
+                    drive_right = 0
 
-                while cancel_flag:
+                    while cancel_flag:
 
-                    readings = [0, 0, 0, 0, 0, 0]
-                    for ToFaddress in range(0, 6):
-                        plexer.channel(address_mux, ToFaddress)
-                        readings[ToFaddress] = tof_sensor.get_distance()
+                        readings = [0, 0, 0, 0, 0, 0]
+                        for ToFaddress in range(0, 6):
+                            plexer.channel(address_mux, ToFaddress)
+                            readings[ToFaddress] = tof_sensor.get_distance()
 
-                        time.sleep(0.01)
-                    print readings
+                            time.sleep(0.01)
+                        print readings
 
-                    # turn it up to 11
+                        # turn it up to 11
 
-                    left_sensor = readings[4]
-                    right_sensor = readings[1]
+                        left_sensor = readings[4]
+                        right_sensor = readings[1]
 
-                    if left_sensor > 240 & right_sensor > 240:
-                        print("full speed ahead")
-                        drive_left = speed
-                        drive_right = speed
+                        if left_sensor > 240 & right_sensor > 240:
+                            print("full speed ahead")
+                            drive_left = speed
+                            drive_right = speed
 
-                    elif left_sensor == right_sensor:
-                        print("full speed ahead")
-                        drive_left = speed
-                        drive_right = speed
+                        elif left_sensor == right_sensor:
+                            print("full speed ahead")
+                            drive_left = speed
+                            drive_right = speed
 
-                    elif left_sensor > right_sensor:
-                        print("turn left")
-                        drive_left = speed - (speed * 0.1)
-                        drive_right = speed
+                        elif left_sensor > right_sensor:
+                            print("turn left")
+                            drive_left = speed - (speed * 0.1)
+                            drive_right = speed
 
-                    elif right_sensor > left_sensor:
-                        print("turn right")
-                        drive_left = speed
-                        drive_right = speed - (speed * 0.1)
+                        elif right_sensor > left_sensor:
+                            print("turn right")
+                            drive_left = speed
+                            drive_right = speed - (speed * 0.1)
 
-                    # set motor power levels
-                    PBR.SetMotor1(-drive_left * maxPower)
-                    PBR.SetMotor2((drive_right * maxPower))
-
-
-                # stop motors
-                PBR.SetMotor1(0)
-                PBR.SetMotor2(0)
+                        # set motor power levels
+                        PBR.SetMotor1(-drive_left * maxPower)
+                        PBR.SetMotor2((drive_right * maxPower))
 
 
-                button_flag = True
-                cancel_flag = True
-                options_module['Speed Run'] = False
-                menu_flag = True
-                print("#### speed run ####")
+                    # stop motors
+                    PBR.SetMotor1(0)
+                    PBR.SetMotor2(0)
+
+
+                    button_flag = True
+                    cancel_flag = True
+                    options_module['Speed Run'] = False
+                    menu_flag = True
+                    print("#### speed run ####")
+                else:
+                    LCD_update("fit the ", "Sensor Head", "Meat Bag!", 255, 0, 0)
+                    command = "flite -voice rms -t 'fit the Sensor Head Meat Bag!' "
+                    os.system(command)
+                    time.sleep(5)
+                    button_flag = True
+                    cancel_flag = True
+                    options_module['Speed Run'] = False
+                    menu_flag = True
+
 
 # maze
 
             if options_module['Maze']:
-                maze()
-                options_module['Maze'] = False
-                menu_flag = True
-                print("Maze exit")
+                if mux_flag:
+                    LCD_update("", "   Maze", "", 255, 0, 0)
+                    command = "flite -voice rms -t 'Hello, anybody there? has anybody seen the exit' "
+                    os.system(command)
+                    while button_flag:
+                        time.sleep(0.001)
+                        button_flag = False
+                    LCD_update("Right, Right", "Left, Left","Freedom!", 125, 0, 125)
+
+                    # define max power
+
+                    speed = 1.0
+
+                    # define motor variables and assign zero to them
+                    drive_left = 0
+                    drive_right = 0
+
+                    while cancel_flag:
+
+                        readings = [0, 0, 0, 0, 0, 0]
+                        for ToFaddress in range(0, 6):
+                            plexer.channel(address_mux, ToFaddress)
+                            readings[ToFaddress] = tof_sensor.get_distance()
+
+                            time.sleep(0.01)
+                        print readings
+
+                        # turn it up to 11
+
+                        left_sensor = readings[4]
+                        right_sensor = readings[1]
+
+                        if left_sensor > 240 & right_sensor > 240:
+                            print("full speed ahead")
+                            drive_left = speed
+                            drive_right = speed
+
+                        elif left_sensor == right_sensor:
+                            print("full speed ahead")
+                            drive_left = speed
+                            drive_right = speed
+
+                        elif left_sensor > right_sensor:
+                            print("turn left")
+                            drive_left = speed - (speed * 0.1)
+                            drive_right = speed
+
+                        elif right_sensor > left_sensor:
+                            print("turn right")
+                            drive_left = speed
+                            drive_right = speed - (speed * 0.1)
+
+                        # set motor power levels
+                        PBR.SetMotor1(-drive_left * maxPower)
+                        PBR.SetMotor2((drive_right * maxPower))
+
+                    # stop motors
+                    PBR.SetMotor1(0)
+                    PBR.SetMotor2(0)
+
+                    button_flag = True
+                    cancel_flag = True
+                    options_module['Maze'] = False
+                    menu_flag = True
+                    print("#### Maze ####")
+                else:
+                    LCD_update("fit the ", "Sensor Head", "Meat Bag!", 255, 0, 0)
+                    command = "flite -voice rms -t 'fit the Sensor Head Meat Bag!' "
+                    os.system(command)
+                    time.sleep(5)
+                    button_flag = True
+                    cancel_flag = True
+
+                    options_module['Maze'] = False
+                    menu_flag = True
+                    print("Maze exit")
 
 # kicker
 
             if options_module['Kicker']:
                 if lcd_flag:
                     LCD_update("Danager! Meatbag", "   in Control", " SELECT to EXIT", 0, 0, 255)
+                    command = "flite -voice rms -t 'Danager! Meatbag in Control with a weapon!' "
+                    os.system(command)
                     lcd_flag =False
 
                 if event.code == "BTN_EAST":
@@ -712,7 +805,7 @@ try:
                             print("#### no file created ####")
 
 
-                        os.system("mplayer -quiet -slave -loop 0 -input file=/home/pi/PiWars/m_fifo -shuffle -playlist /home/pi/Sounds/8bit/mylist.txt &")
+                        os.system("mplayer -quiet -slave -loop 0 -input file=/home/pi/PiWars/m_fifo -shuffle -playlist /home/pi/Sounds/8bit/play.m3u &")
 
                 if event.code == "ABS_HAT0X":
                     if event.state == -1:
